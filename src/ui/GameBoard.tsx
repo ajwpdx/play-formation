@@ -21,11 +21,12 @@ interface Snapshot {
   draw: DOMRect;
 }
 
-function Pile({ count, label, pileRef, bubble }: { count: number; label: string; pileRef: React.Ref<HTMLDivElement>; bubble?: React.ReactNode }) {
+function Pile({ count, label, pileRef, bubble, onClick }: { count: number; label: string; pileRef: React.Ref<HTMLDivElement>; bubble?: React.ReactNode; onClick?: () => void }) {
   return (
     <div className="pile">
       {bubble && <div className="bubble">{bubble}</div>}
-      <div className="stack" ref={pileRef}>
+      <div className={onClick ? 'stack clickable' : 'stack'} ref={pileRef} onClick={onClick}
+        role={onClick ? 'button' : undefined}>
         {count === 0 ? <div className="slot" /> : (
           <>
             {count > 2 && <div className="back" style={{ top: 4, left: 4 }} />}
@@ -183,10 +184,13 @@ export function GameBoard({ initial, showTally, onExit }: { initial: GameState; 
   const noSteal = selectedCard?.action === 'steal' && targeting !== 'steal';
 
   const prompt = state.winner !== null || animating ? ''
-    : state.pending ? 'Collect: keep one of the two drawn cards.'
+    : state.pending ? 'Collect: click one of the drawn cards (left of your cards) to keep. The other goes to the River.'
     : selectedCard?.action === 'collect' ? 'Collect: click "Draw Two Cards" above the Draw pile, or discard instead.'
     : selectedCard ? (noSteal ? 'No undefended opponent cards to steal. You can discard instead.' : HINT[selectedCard.action])
     : 'Select one of your cards.';
+
+  const collectReady = interactive && selected !== null && selectedCard?.action === 'collect';
+  const drawTwo = () => commit({ type: 'collect', cell: selected! }, 'used Collect');
 
   const turnLabel = `Player ${(animating ? me : state.current) + 1}'s turn`;
 
@@ -222,11 +226,16 @@ export function GameBoard({ initial, showTally, onExit }: { initial: GameState; 
           </div>
 
           <div className="river-wrap">
+            {interactive && targeting === 'steal' && (
+              <div className="callout up">Steal a card from your opponent's grid</div>
+            )}
+            {interactive && targeting === 'replace' && (
+              <div className="callout down">Replace a card in the River</div>
+            )}
             <Pile count={state.drawPile.length} label="Draw" pileRef={drawRef}
-              bubble={interactive && selected !== null && selectedCard?.action === 'collect' && (
-                <button className="primary" onClick={() => commit({ type: 'collect', cell: selected }, 'used Collect')}>
-                  Draw Two Cards
-                </button>
+              onClick={collectReady ? drawTwo : undefined}
+              bubble={collectReady && (
+                <button className="primary" onClick={drawTwo}>Draw Two Cards</button>
               )} />
             <button className="discard-slot" disabled={!interactive || selected === null}
               onClick={() => commit({ type: 'discard', cell: selected! }, `discarded cell ${selected! + 1}`)}>
@@ -250,12 +259,28 @@ export function GameBoard({ initial, showTally, onExit }: { initial: GameState; 
           <div className="mine" key={`mine-${viewer}`}>
             <h2>{turnLabel}</h2>
             <p className="prompt">{prompt}</p>
+            <div className="grid-wrap">
+              {state.pending && (
+                <div className="drawn">
+                  <small>Drawn: keep one</small>
+                  <div className="drawn-cards">
+                    {state.pending.drawn.map((card, i) => (
+                      <CardView key={card.id} card={card} targetable={interactive}
+                        onClick={interactive ? () => commit({ type: 'collectChoose', keep: i as 0 | 1 }, null) : undefined} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {interactive && targeting === 'switch' && (
+                <div className="callout left">Switch cards in your grid</div>
+              )}
             <div className="grid">
               {myGrid.map((card, i) => (
                 <CardView key={i} card={card} defended={isDefended(myGrid, i)} selected={selected === i}
                   targetable={interactive && targeting === 'switch' && i !== selected}
                   onClick={interactive && !state.pending ? () => clickOwn(i) : undefined} />
               ))}
+            </div>
             </div>
           </div>
 
@@ -264,21 +289,6 @@ export function GameBoard({ initial, showTally, onExit }: { initial: GameState; 
 
         {showTally && <Tally title="Trash" cards={state.trash} numSuits={state.config.numSuits} />}
       </div>
-
-      {state.pending && (
-        <div className="overlay" style={{ pointerEvents: animating ? 'none' : 'auto' }}>
-          <div className="modal">
-            <h2>Collect: keep one</h2>
-            <div className="choose">
-              {state.pending.drawn.map((card, i) => (
-                <CardView key={card.id} card={card}
-                  onClick={interactive ? () => commit({ type: 'collectChoose', keep: i as 0 | 1 }, null) : undefined} />
-              ))}
-            </div>
-            <p>Click the card to keep. The other goes to the start of the River.</p>
-          </div>
-        </div>
-      )}
 
       {state.winner !== null && !animating && (
         <div className="overlay">

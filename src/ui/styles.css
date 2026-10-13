@@ -38,7 +38,7 @@ button.link { background: none; border: 0; color: var(--accent); text-decoration
 @keyframes pulse { to { outline-color: transparent; } }
 .card:disabled { cursor: default; opacity: 1; }
 
-.river-wrap { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 12px; background: var(--panel); border-radius: 12px; padding: 12px; margin: 10px 0; }
+.river-wrap { position: relative; margin-top: 44px !important; display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 12px; background: var(--panel); border-radius: 12px; padding: 12px; margin: 10px 0; }
 .river { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
 .pile { text-align: center; font-size: 0.75rem; opacity: 0.9; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .stack { position: relative; width: 80px; height: 80px; }
@@ -82,3 +82,18 @@ button.link { background: none; border: 0; color: var(--accent); text-decoration
 .bubble { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: 20; }
 .bubble::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -6px; border: 6px solid transparent; border-top-color: var(--accent); }
 .bubble button { white-space: nowrap; padding: 8px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+
+.grid-wrap { position: relative; display: inline-block; }
+.drawn { position: absolute; right: 100%; top: 0; bottom: 0; margin-right: 28px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; white-space: nowrap; color: var(--accent); }
+.drawn-cards { display: flex; gap: 8px; }
+
+.callout { position: absolute; z-index: 20; background: var(--accent); color: #222; font-weight: 700; font-size: 0.85rem;
+  padding: 6px 12px; border-radius: 8px; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+.callout::after { content: ''; position: absolute; border: 7px solid transparent; }
+.callout.up, .callout.down { left: 50%; transform: translateX(-50%); }
+.callout.up { top: -40px; } .callout.up::after { bottom: 100%; left: 50%; margin-left: -7px; border-bottom-color: var(--accent); }
+.callout.down { top: -40px; } .callout.down::after { top: 100%; left: 50%; margin-left: -7px; border-top-color: var(--accent); }
+.callout.left { left: calc(100% + 18px); top: 50%; transform: translateY(-50%); }
+.callout.left::after { right: 100%; top: 50%; margin-top: -7px; border-right-color: var(--accent); }
+
+.stack.clickable { cursor: pointer; border-radius: 10px; outline: 3px dashed var(--accent); outline-offset: 3px; animation: pulse 1s infinite alternate; }
