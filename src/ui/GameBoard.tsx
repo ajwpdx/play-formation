@@ -147,8 +147,7 @@ export function GameBoard({ initial, showTally, onExit }: { initial: GameState; 
     const card = myGrid[cell]!;
     setSelected(cell);
     setTargeting(null);
-    // Selecting an action card starts its action immediately.
-    if (card.action === 'collect') return commit({ type: 'collect', cell }, 'used Collect');
+    // Selecting Switch/Replace/Steal starts targeting immediately; Collect asks for confirmation.
     if (card.action === 'switch') setTargeting('switch');
     if (card.action === 'replace') setTargeting('replace');
     if (card.action === 'steal' && moves.some((m) => m.type === 'steal' && m.cell === cell)) setTargeting('steal');
@@ -159,6 +158,7 @@ export function GameBoard({ initial, showTally, onExit }: { initial: GameState; 
 
   const prompt = state.winner !== null || animating ? ''
     : state.pending ? 'Collect: keep one of the two drawn cards.'
+    : selectedCard?.action === 'collect' ? 'Collect: confirm to use it, or discard it instead.'
     : selectedCard ? (noSteal ? 'No undefended opponent cards to steal. You can discard instead.' : HINT[selectedCard.action])
     : 'Select one of your cards.';
 
@@ -221,9 +221,18 @@ export function GameBoard({ initial, showTally, onExit }: { initial: GameState; 
             <p className="prompt">{prompt}</p>
             <div className="grid">
               {myGrid.map((card, i) => (
-                <CardView key={i} card={card} defended={isDefended(myGrid, i)} selected={selected === i}
-                  targetable={interactive && targeting === 'switch' && i !== selected}
-                  onClick={interactive && !state.pending ? () => clickOwn(i) : undefined} />
+                <div key={i} className="cell">
+                  <CardView card={card} defended={isDefended(myGrid, i)} selected={selected === i}
+                    targetable={interactive && targeting === 'switch' && i !== selected}
+                    onClick={interactive && !state.pending ? () => clickOwn(i) : undefined} />
+                  {interactive && selected === i && card?.action === 'collect' && (
+                    <div className="popover">
+                      <button className="primary" onClick={() => commit({ type: 'collect', cell: i }, 'used Collect')}>
+                        Use Collect
+                      </button>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>
