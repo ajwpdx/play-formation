@@ -3,7 +3,7 @@ import { applyMove, isDefended, legalMoves, type Card, type GameState, type Move
 import { CardView } from './CardView';
 import { SUITS, SuitIcon } from './suits';
 
-const ANIM_MS = 700;
+const PHASE_MS = 520;
 const EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
 
 type Targeting = 'switch' | 'replace' | 'steal' | null;
@@ -88,38 +88,57 @@ export function GameBoard({ initial, showTally, onExit }: { initial: GameState; 
     const trash = trashRef.current!.getBoundingClientRect();
     const seen = new Set<number>();
 
+    // Each animation gets a rank; ranks play one after another with no gaps:
+    // 0 cards entering/shifting in the River, 1 cards moving between Playing Areas,
+    // 2 cards flowing off the River into the Trash, 3 cards arriving from the Draw Pile.
+    const jobs: { rank: number; run: (delay: number) => void }[] = [];
+
     boardRef.current?.querySelectorAll<HTMLElement>('[data-card-id]').forEach((el) => {
       const id = Number(el.dataset.cardId);
       seen.add(id);
+      const prev = snap.cards.get(id);
       const to = el.getBoundingClientRect();
-      const from = snap.cards.get(id)?.rect ?? snap.draw; // unseen cards come off the Draw Pile
+      const from = prev?.rect ?? snap.draw;
       const dx = from.left - to.left;
       const dy = from.top - to.top;
       const sc = from.width / to.width;
       if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(sc - 1) < 0.01) return;
-      el.style.zIndex = '60';
-      el.style.transformOrigin = 'top left';
-      el.animate(
-        [{ transform: `translate(${dx}px, ${dy}px) scale(${sc})` }, { transform: 'none' }],
-        { duration: ANIM_MS, easing: EASE },
-      ).onfinish = () => { el.style.zIndex = ''; };
+      const rank = !prev ? 3 : el.closest('.river') ? 0 : 1;
+      jobs.push({ rank, run: (delay) => {
+        el.style.zIndex = '60';
+        el.style.transformOrigin = 'top left';
+        el.animate(
+          [{ transform: `translate(${dx}px, ${dy}px) scale(${sc})` }, { transform: 'none' }],
+          { duration: PHASE_MS, delay, easing: EASE, fill: 'backwards' },
+        ).onfinish = () => { el.style.zIndex = ''; };
+      } });
     });
 
     snap.cards.forEach(({ rect, node }, id) => {
       if (seen.has(id)) return;
-      const ghost = node;
-      ghost.removeAttribute('data-card-id');
-      ghost.classList.remove('targetable', 'selected');
-      Object.assign(ghost.style, {
-        position: 'fixed', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`,
-        height: `${rect.height}px`, margin: '0', zIndex: '55', pointerEvents: 'none', transformOrigin: 'top left',
-      });
-      document.body.appendChild(ghost);
-      ghost.animate(
-        [{ transform: 'none' }, { transform: `translate(${trash.left - rect.left}px, ${trash.top - rect.top}px) scale(${trash.width / rect.width})` }],
-        { duration: ANIM_MS, easing: EASE, fill: 'forwards' },
-      ).onfinish = () => ghost.remove();
+      jobs.push({ rank: 2, run: (delay) => {
+        node.removeAttribute('data-card-id');
+        node.classList.remove('targetable', 'selected');
+        Object.assign(node.style, {
+          position: 'fixed', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`,
+          height: `${rect.height}px`, margin: '0', zIndex: '55', pointerEvents: 'none', transformOrigin: 'top left',
+        });
+        document.body.appendChild(node);
+        node.animate(
+          [{ transform: 'none' }, { transform: `translate(${trash.left - rect.left}px, ${trash.top - rect.top}px) scale(${trash.width / rect.width})` }],
+          { duration: PHASE_MS, delay, easing: EASE, fill: 'both' },
+        ).onfinish = () => node.remove();
+      } });
     });
+
+    const ranks = [...new Set(jobs.map((j) => j.rank))].sort();
+    jobs.forEach((j) => j.run(ranks.indexOf(j.rank) * PHASE_MS));
+
+    // Show the whole action first, then hand the board to the next player.
+    window.setTimeout(() => {
+      setViewer(latest.current.current);
+      setAnimating(false);
+    }, ranks.length * PHASE_MS + 150);
   }, [state]);
 
   const commit = (move: Move, text: string | null) => {
@@ -131,11 +150,6 @@ export function GameBoard({ initial, showTally, onExit }: { initial: GameState; 
     setTargeting(null);
     setAnimating(true);
     if (text) setLog((l) => [`P${me + 1}: ${text}`, ...l].slice(0, 5));
-    // Show the action first, then hand the board to the next player.
-    window.setTimeout(() => {
-      setViewer(latest.current.current);
-      setAnimating(false);
-    }, ANIM_MS + 100);
   };
 
   // ---- interactions ----
