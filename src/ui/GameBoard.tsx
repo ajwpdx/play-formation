@@ -21,9 +21,10 @@ interface Snapshot {
   draw: DOMRect;
 }
 
-function Pile({ count, label, pileRef }: { count: number; label: string; pileRef: React.Ref<HTMLDivElement> }) {
+function Pile({ count, label, pileRef, bubble }: { count: number; label: string; pileRef: React.Ref<HTMLDivElement>; bubble?: React.ReactNode }) {
   return (
     <div className="pile">
+      {bubble && <div className="bubble">{bubble}</div>}
       <div className="stack" ref={pileRef}>
         {count === 0 ? <div className="slot" /> : (
           <>
@@ -114,18 +115,29 @@ export function GameBoard({ initial, showTally, onExit }: { initial: GameState; 
       } });
     });
 
+    const gap = parseFloat(getComputedStyle(boardRef.current!.querySelector('.river')!).columnGap) || 6;
     snap.cards.forEach(({ rect, node }, id) => {
       if (seen.has(id)) return;
-      jobs.push({ rank: 2, run: (delay) => {
-        node.removeAttribute('data-card-id');
-        node.classList.remove('targetable', 'selected');
-        Object.assign(node.style, {
-          position: 'fixed', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`,
-          height: `${rect.height}px`, margin: '0', zIndex: '55', pointerEvents: 'none', transformOrigin: 'top left',
-        });
-        document.body.appendChild(node);
+      // The card pushed off the end first slides one spot over (the others shift into its old slot),
+      // then flows into the Trash.
+      const pitch = rect.width + gap;
+      node.removeAttribute('data-card-id');
+      node.classList.remove('targetable', 'selected');
+      Object.assign(node.style, {
+        position: 'fixed', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`,
+        height: `${rect.height}px`, margin: '0', zIndex: '55', pointerEvents: 'none', transformOrigin: 'top left',
+      });
+      document.body.appendChild(node);
+      jobs.push({ rank: 0, run: (delay) => {
         node.animate(
-          [{ transform: 'none' }, { transform: `translate(${trash.left - rect.left}px, ${trash.top - rect.top}px) scale(${trash.width / rect.width})` }],
+          [{ transform: 'none' }, { transform: `translateX(${pitch}px)` }],
+          { duration: PHASE_MS, delay, easing: EASE, fill: 'both' },
+        );
+      } });
+      jobs.push({ rank: 2, run: (delay) => {
+        node.animate(
+          [{ transform: `translateX(${pitch}px)` },
+           { transform: `translate(${trash.left - rect.left}px, ${trash.top - rect.top}px) scale(${trash.width / rect.width})` }],
           { duration: PHASE_MS, delay, easing: EASE, fill: 'both' },
         ).onfinish = () => node.remove();
       } });
@@ -172,7 +184,7 @@ export function GameBoard({ initial, showTally, onExit }: { initial: GameState; 
 
   const prompt = state.winner !== null || animating ? ''
     : state.pending ? 'Collect: keep one of the two drawn cards.'
-    : selectedCard?.action === 'collect' ? 'Collect: confirm to use it, or discard it instead.'
+    : selectedCard?.action === 'collect' ? 'Collect: click "Draw Two Cards" above the Draw pile, or discard instead.'
     : selectedCard ? (noSteal ? 'No undefended opponent cards to steal. You can discard instead.' : HINT[selectedCard.action])
     : 'Select one of your cards.';
 
@@ -210,7 +222,12 @@ export function GameBoard({ initial, showTally, onExit }: { initial: GameState; 
           </div>
 
           <div className="river-wrap">
-            <Pile count={state.drawPile.length} label="Draw" pileRef={drawRef} />
+            <Pile count={state.drawPile.length} label="Draw" pileRef={drawRef}
+              bubble={interactive && selected !== null && selectedCard?.action === 'collect' && (
+                <button className="primary" onClick={() => commit({ type: 'collect', cell: selected }, 'used Collect')}>
+                  Draw Two Cards
+                </button>
+              )} />
             <button className="discard-slot" disabled={!interactive || selected === null}
               onClick={() => commit({ type: 'discard', cell: selected! }, `discarded cell ${selected! + 1}`)}>
               Discard
@@ -235,18 +252,9 @@ export function GameBoard({ initial, showTally, onExit }: { initial: GameState; 
             <p className="prompt">{prompt}</p>
             <div className="grid">
               {myGrid.map((card, i) => (
-                <div key={i} className="cell">
-                  <CardView card={card} defended={isDefended(myGrid, i)} selected={selected === i}
-                    targetable={interactive && targeting === 'switch' && i !== selected}
-                    onClick={interactive && !state.pending ? () => clickOwn(i) : undefined} />
-                  {interactive && selected === i && card?.action === 'collect' && (
-                    <div className="popover">
-                      <button className="primary" onClick={() => commit({ type: 'collect', cell: i }, 'used Collect')}>
-                        Use Collect
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <CardView key={i} card={card} defended={isDefended(myGrid, i)} selected={selected === i}
+                  targetable={interactive && targeting === 'switch' && i !== selected}
+                  onClick={interactive && !state.pending ? () => clickOwn(i) : undefined} />
               ))}
             </div>
           </div>
